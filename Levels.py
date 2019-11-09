@@ -68,41 +68,45 @@ def get_values():
 
 class Editor:
     def __init__(self, parent):
-        self.parent = parent
-        self.filename = None
-        self.board = None
+        self.board: np.ndarray = None
 
-        self.tile_frame = None
+        self.parent = parent
+
+        self.menu = None
+        self.filemenu = None
+        self.filename: str = None
+
+        self.dim_frame = None
         self.x_ent = None
         self.y_ent = None
+        self.set_btn = None
 
-        self.filename = None
+        self.tile_frame = None
+        self.grid = None
 
         self.create_gui()
 
     def create_gui(self):
         self.parent.title("Baba is You Level Editor")
 
-        menu = Menu(self.parent)
-        self.parent.config(menu=menu)
-        self.filemenu = Menu(menu)
-        menu.add_cascade(label="File", menu=self.filemenu)
+        self.menu = Menu(self.parent)
+        self.parent.config(menu=self.menu)
+        self.filemenu = Menu(self.menu)
+        self.menu.add_cascade(label="File", menu=self.filemenu)
         self.filemenu.add_command(label='Open...', command=self.open_file)
         self.filemenu.add_separator()
-        self.filemenu.add_command(label='Save')
-        self.filemenu.entryconfig("Save", state="disabled")
-        self.filemenu.add_command(label='Save As...', command=self.save_as_file)
-        self.filemenu.entryconfig("Save As...", state="disabled")
+        self.filemenu.add_command(label='Save', state="disabled", command=self.save_file)
+        self.filemenu.add_command(label='Save As...', state="disabled", command=self.save_as_file)
         self.filemenu.add_separator()
         self.filemenu.add_command(label='Exit', command=self.parent.quit)
 
-        dim_frame = Frame(self.parent)
-        dim_frame.grid(row=0, column=0)
+        self.dim_frame = Frame(self.parent)
+        self.dim_frame.grid(row=0, column=0)
 
-        Label(dim_frame, text="x").grid(row=0, column=0)
-        Label(dim_frame, text="y").grid(row=0, column=2)
-        self.x_ent = Entry(dim_frame)
-        self.y_ent = Entry(dim_frame)
+        Label(self.dim_frame, text="x").grid(row=0, column=0)
+        Label(self.dim_frame, text="y").grid(row=0, column=2)
+        self.x_ent = Entry(self.dim_frame)
+        self.y_ent = Entry(self.dim_frame)
 
         self.x_ent.insert(0, 4)
         self.y_ent.insert(0, 3)
@@ -110,8 +114,8 @@ class Editor:
         self.x_ent.grid(row=0, column=1)
         self.y_ent.grid(row=0, column=3)
 
-        set_btn = Button(dim_frame, text="SET", width=10, command=self.set_dim)
-        set_btn.grid(row=0, column=5)
+        self.set_btn = Button(self.dim_frame, text="SET", width=10, command=self.set_dim)
+        self.set_btn.grid(row=0, column=5)
 
     def set_dim(self):
         try:
@@ -186,3 +190,7 @@ def editor():
     ed = Tk()
     Editor(ed)
     ed.mainloop()
+
+
+if __name__ == "__main__":
+    editor()
