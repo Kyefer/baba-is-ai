@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from enum import Enum
-from typing import Dict, Callable
+from typing import Dict, Callable, List, Tuple, Union
+
 
 import numpy as np
 
@@ -10,6 +13,9 @@ class Object(Enum):
     WALL = 3
     ROCK = 4
     KEY = 5
+    WATER = 6
+    COG = 7
+    ROBOT = 8
 
 
 class Link(Enum):
@@ -17,20 +23,23 @@ class Link(Enum):
     AND = 2
 
 
-class Description(Enum):
+class Modifier(Enum):
     YOU = 1
     WIN = 2
     STOP = 3
     PUSH = 4
     MOVE = 5
+    FLOAT = 6
+    HOT = 7
+    SINK = 8
+    DEFEAT = 9
 
 
 class EntityType(Enum):
-    EMPTY = 0
     OBJ = 1
     NOUN = 2
     LINK = 3
-    DESC = 4
+    MOD = 4
 
 
 class Entity():
@@ -43,36 +52,60 @@ class Entity():
             # error
             pass
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "{}[{}]".format(self.name, self.type.name)
 
-    def in_board(self):
-        name4 = self.name + " " * (4 - len(self.name))
-        return [name4[:2], name4[2:]]
-
     @classmethod
-    def EMPTY(cls):
+    def EMPTY(cls) -> Entity:
         return Entity("", EntityType.EMPTY)
 
     @classmethod
-    def IS(cls):
-        return Entity("IS", EntityType.LINK, Link.IS)
+    def IS(cls) -> Entity:
+        return Entity(Link.IS.name, EntityType.LINK, Link.IS)
 
     @classmethod
-    def AND(cls):
-        return Entity("AND", EntityType.LINK, Link.AND)
+    def AND(cls) -> Entity:
+        return Entity(Link.AND.name, EntityType.LINK, Link.AND)
 
     @classmethod
-    def OBJ(cls, obj: Object):
-        return Entity(obj.name.lower(), EntityType.OBJ, obj)
-
-    @classmethod
-    def NOUN(cls, obj: Object):
+    def NOUN(cls, obj: Object) -> Entity:
         return Entity(obj.name, EntityType.NOUN, obj)
 
     @classmethod
-    def DESC(cls, desc: Description):
-        return Entity(desc.name, EntityType.DESC, desc)
+    def MOD(cls, desc: Modifier) -> Entity:
+        return Entity(desc.name, EntityType.MOD, desc)
+
+
+class Tile:
+    def __init__(self):
+        self.entity: Entity = None
+        self.objects: List[Object] = []
+
+    def view(self, rules) -> Tuple(str, str):
+        if self.entity:
+            return Tile.split4(self.entity.name)
+
+        if not self.objects:
+            return ("  ", "  ")
+
+        for obj in self.objects:
+            if obj in rules[Modifier.YOU]:
+                return Tile.split4(obj.name.lower())
+
+        for obj in self.objects:
+            if obj in rules[Modifier.PUSH]:
+                return Tile.split4(obj.name.lower())
+
+        for obj in self.objects:
+            if obj in rules[Modifier.STOP]:
+                return Tile.split4(obj.name.lower())
+
+        return Tile.split4(self.objects[0].name.lower())
+
+    @classmethod
+    def split4(cls, name):
+        name4 = name + " " * (4 - len(name))
+        return (name4[:2], name4[2:])
 
 
 class Level:
@@ -80,31 +113,18 @@ class Level:
         self.descriptor = descriptor
         self.width = width
         self.height = height
-        self.board: np.ndarray = np.full((height, width), Entity.EMPTY())
+        self.board = np.array([[Tile() for _ in range(width)] for _ in range(height)],
+                              dtype=Tile)
 
-    def setup(self, entities: Dict[np.ndarray, Entity]):
+    def setup_entities(self, entities: Dict[np.ndarray, Entity]):
         for pos, entity in entities.items():
-            self.board[pos] = entity
+            self.board[pos].entity = entity
 
-    def __str__(self):
-        lines = []
-        for i in range(self.height):
-            line = ["", ""]
-            for j in range(self.width):
-                cell = self.board[i, j]
-                in_board = cell.in_board()
-                line[0] += in_board[0]
-                line[1] += in_board[1]
+    def setup_objects(self, objects: Dict[np.ndarray, Object]):
+        for pos, obj in objects.items():
+            self.board[pos].objects.append(obj)
 
-                if j < self.width - 1:
-                    line[0] += " | "
-                    line[1] += " | "
-            lines += line
-            if i < self.height - 1:
-                lines.append("-" * (5 * self.width - 1))
-        return "\n".join(lines)
-
-    def copy(self) -> "Level":
+    def copy(self) -> Level:
         new = Level(self.descriptor, self.width, self.height)
         new.board = np.copy(self.board)
         return new
@@ -125,15 +145,40 @@ class Game:
         self.level = level.copy()
         self.level_next = level.copy()
         self.initial_level = level.copy()
+        self.rules = self.parse_rules()
+
+    def parse_rules(self):
+        rules = {
+            Modifier.YOU: set(),
+            Modifier.WIN: set(),
+            Modifier.STOP: set(),
+            Modifier.MOVE: set(),
+            Modifier.PUSH: set()
+        }
+
+        for i in range(self.level.height - 2):
+            for j in range(self.level.width - 2):
+                cell00 = self.level.board[i, j].entity
+                cell01 = self.level.board[i, j + 1].entity
+                cell02 = self.level.board[i, j + 2].entity
+                cell10 = self.level.board[i + 1, j].entity
+                cell20 = self.level.board[i + 2, j].entity
+
+                if cell00 and cell01 and cell02 and cell00.type is EntityType.NOUN and cell01.subtype is Link.IS and cell02.type is EntityType.MOD:
+                    rules[cell02.subtype].add(cell00.subtype)
+
+                if cell00 and cell10 and cell20 and cell00.type is EntityType.NOUN and cell10.subtype is Link.IS and cell20.type is EntityType.MOD:
+                    rules[cell20.subtype].add(cell00.subtype)
+
+        return rules
 
     def perform(self, action: Movement):
         if not self.in_progress:
             print("Starting game {} playig level {}".format(self.desciptor, self.initial_level.descriptor))
             self.in_progress = True
 
-        rules = self.parse_rules()
-        yous = self.find(lambda ent: ent.type is EntityType.OBJ and ent.subtype in rules[Description.YOU])
-        moves = self.find(lambda ent: ent.type is EntityType.OBJ and ent.subtype in rules[Description.MOVE])
+        self.rules = self.parse_rules()
+        you_indexes = self.find(lambda tile: set(tile.objects) & self.rules[Modifier.YOU])
 
         if action is Movement.LEFT:
             delta = np.array((0, -1))
@@ -144,90 +189,76 @@ class Game:
         elif action is Movement.DOWN:
             delta = np.array((1, 0))
         else:
-            return
+            return False
 
         will_move = []
-        for you in yous:
-            entities = [you]
+        for you_idx in you_indexes:
+            you = self.level.board.item(*you_idx)
 
-            adj = list(you + delta)
-            cell = self.level.board.item(*adj)
-            while not self.empty(adj):
-                cell = self.level.board.item(*adj)
-                if cell.type is EntityType.OBJ and cell.subtype in rules[Description.STOP]:
-                    entities = []
-                    break
-                elif cell.type is EntityType.OBJ and cell.subtype in rules[Description.PUSH]:
-                    pass
-                elif cell.type is EntityType.OBJ:
-                    # Neither stop nor push -- treat as empty
+            adj_idx = list(you_idx + delta)
+            adj = self.level.board.item(*adj_idx)
+
+            tiles = [(you, adj)]
+
+            while self.has_entity(adj):
+                if set(adj.objects) & self.rules[Modifier.STOP]:
+                    tiles = []
                     break
 
-                entities = [adj] + entities
-                adj = list(np.array(adj) + delta)
-            # if action is Movement.DOWN or action is Movement.RIGHT:
-            will_move += entities
-            # else:
-            #     will_move += entities
+                adj_idx = list(np.array(adj_idx) + delta)
+                nxt = self.level.board.item(*adj_idx)
+                tiles = [(adj, nxt)] + tiles
+                adj = nxt
 
-        for move in will_move:
-            self.move(move, delta)
+            will_move += tiles
+
+        for tile_a, tile_b in will_move:
+            self.move_entity(tile_a, tile_b)
 
         self.level = self.level_next
         self.level_next = self.level_next.copy()
 
-        
-        yous = self.find(lambda ent: ent.type is EntityType.OBJ and ent.subtype in rules[Description.YOU])
-        moves = self.find(lambda ent: ent.type is EntityType.OBJ and ent.subtype in rules[Description.MOVE])
-        wins = self.find(lambda ent: ent.type is EntityType.OBJ and ent.subtype in rules[Description.WIN])
+        you_indexes = self.find(lambda tile: set(tile.objects) & self.rules[Modifier.YOU])
+        win_indexes = self.find(lambda tile: set(tile.objects) & self.rules[Modifier.WIN])
 
-        # if not (yous + moves):
-        #     print("Failed")
-        #     return False
-        # elif np.intersect1d(yous, wins):
-        #     print("You Win")
-        #     return True
-
-    def parse_rules(self):
-        rules = {
-            Description.YOU: [],
-            Description.WIN: [],
-            Description.STOP: [],
-            Description.MOVE: [],
-            Description.PUSH: []
-        }
-
-        for i in range(self.level.height - 2):
-            for j in range(self.level.width - 2):
-                cell00 = self.cell(i, j)
-                cell01 = self.cell(i, j + 1)
-                cell02 = self.cell(i, j + 2)
-                cell10 = self.cell(i + 1, j)
-                cell20 = self.cell(i + 2, j)
-
-                if cell00.type is EntityType.NOUN and cell01.subtype is Link.IS and cell02.type is EntityType.DESC:
-                    rules[cell02.subtype].append(cell00.subtype)
-
-                if cell00.type is EntityType.NOUN and cell10.subtype is Link.IS and cell20.type is EntityType.DESC:
-                    rules[cell20.subtype].append(cell00.subtype)
-
-        return rules
-
-    def cell(self, row, col) -> Entity:
-        return self.level.board[row, col]
+        return you_indexes & win_indexes
 
     def find(self, func: Callable[[Entity], bool]):
-        pos = []
+        pos = set()
         for i in range(self.level.height):
             for j in range(self.level.width):
                 if func(self.level.board[i, j]):
-                    pos.append((i, j))
+                    pos.add((i, j))
         return pos
 
-    def move(self, pos, delta):
-        new = list(np.array(pos) + delta)
-        self.level_next.board[new[0], new[1]] = self.level_next.board.item(*pos)
-        self.level_next.board[pos[0], pos[1]] = Entity.EMPTY()
+    def move_entity(self, a: Tile, b: Tile):
+        if a.entity:
+            b.entity = a.entity
+            a.entity = None
+        else:
+            for obj in a.objects:
+                if obj in self.rules[Modifier.YOU].union(self.rules[Modifier.PUSH]):
+                    b.objects.append(obj)
+                    a.objects.remove(obj)
+                    break
 
-    def empty(self, pos):
-        return self.level.board.item(*pos).type == EntityType.EMPTY
+    def has_entity(self, tile) -> bool:
+        return tile.entity or set(tile.objects) & self.rules[Modifier.PUSH].union(self.rules[Modifier.STOP])
+
+    def __str__(self) -> str:
+        lines = []
+        for i in range(self.level.height):
+            line = ["", ""]
+            for j in range(self.level.width):
+                tile = self.level.board[i, j]
+                in_board = tile.view(self.parse_rules())
+                line[0] += in_board[0]
+                line[1] += in_board[1]
+
+                if j < self.level.width - 1:
+                    line[0] += " | "
+                    line[1] += " | "
+            lines += line
+            if i < self.level.height - 1:
+                lines.append("-" * (5 * self.level.width - 1))
+        return "\n".join(lines)

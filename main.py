@@ -14,6 +14,7 @@ keyboard_mapping = {
     b'M': Movement.RIGHT,
 }
 
+
 def get_action():
     action = getch()
 
@@ -29,17 +30,19 @@ def get_action():
 
 def loop(game):
     clear()
-    print(game.level)
+    print(game)
 
     action = get_action()
     while action:
         res = game.perform(action)
 
-        if res is None:
-            clear()
-            print(game.level)
+        clear()
+        print(game)
+        
+        if not res:
             action = get_action()
         else:
+            print("YOU WIN!")
             break
 
 
