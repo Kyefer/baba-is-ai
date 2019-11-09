@@ -1,5 +1,8 @@
-from Levels import levels
+import sys
+
+from Levels import levels, editor
 from Game import Game, Movement
+from tests import run_tests
 from utils import getch, clear
 
 keyboard_mapping = {
@@ -20,7 +23,7 @@ def get_action():
 
     if action in keyboard_mapping.keys():
         action = keyboard_mapping[action]
-    elif action is b'\xe0':
+    elif action == b'\xe0':
         action = getch()
         action = keyboard_mapping[action]
     else:
@@ -28,7 +31,7 @@ def get_action():
     return action
 
 
-def loop(game):
+def loop(game: Game):
     clear()
     print(game)
 
@@ -38,7 +41,7 @@ def loop(game):
 
         clear()
         print(game)
-        
+
         if not res:
             action = get_action()
         else:
@@ -47,6 +50,9 @@ def loop(game):
 
 
 if __name__ == "__main__":
-    game = Game("Test Game", levels[0])
-
-    loop(game)
+    if len(sys.argv) == 1 or sys.argv[1] == "00":
+        loop(Game("Test Game", levels[0]))
+    elif sys.argv[1] == "test":
+        run_tests()
+    elif sys.argv[1] == "ed":
+        editor()

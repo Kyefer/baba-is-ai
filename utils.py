@@ -1,27 +1,28 @@
 from os import system, name
 
-class _Getch:
-    """Gets a single character from standard input.  Does not echo to the
-screen."""
+if name == 'nt':
+    # pylint: disable=import-error
+    import msvcrt
+else:
+    import sys
+    import tty
+    # pylint: disable=import-error
+    import termios
 
+
+class Getch:
     def __init__(self):
         try:
-            self.impl = _GetchWindows()
+            self.impl = GetchWindows()
         except ImportError:
-            self.impl = _GetchUnix()
-
-    def __call__(self): return self.impl()
-
-
-class _GetchUnix:
-    def __init__(self):
-        import tty
-        import sys
+            self.impl = GetchUnix()
 
     def __call__(self):
-        import sys
-        import tty
-        import termios
+        return self.impl()
+
+
+class GetchUnix:
+    def __call__(self):
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
         try:
@@ -32,24 +33,16 @@ class _GetchUnix:
         return ch
 
 
-class _GetchWindows:
-    def __init__(self):
-        import msvcrt
-
+class GetchWindows:
     def __call__(self):
-        import msvcrt
         return msvcrt.getch()
 
 
 def clear():
-
-    # for windows
     if name == 'nt':
         _ = system('cls')
-
-    # for mac and linux(here, os.name is 'posix')
     else:
         _ = system('clear')
 
 
-getch = _Getch()
+getch = Getch()

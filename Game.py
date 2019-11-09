@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, Callable, List, Tuple, Union
+from typing import Dict, Callable, List, Tuple
 
 
 import numpy as np
@@ -48,16 +48,8 @@ class Entity():
         self.type = entity_type
         self.subtype = subtype
 
-        if len(name) > 4:
-            # error
-            pass
-
     def __str__(self) -> str:
         return "{}[{}]".format(self.name, self.type.name)
-
-    @classmethod
-    def EMPTY(cls) -> Entity:
-        return Entity("", EntityType.EMPTY)
 
     @classmethod
     def IS(cls) -> Entity:
@@ -113,8 +105,7 @@ class Level:
         self.descriptor = descriptor
         self.width = width
         self.height = height
-        self.board = np.array([[Tile() for _ in range(width)] for _ in range(height)],
-                              dtype=Tile)
+        self.board = np.array([[Tile() for _ in range(height)] for _ in range(width)], dtype=Tile)
 
     def setup_entities(self, entities: Dict[np.ndarray, Entity]):
         for pos, entity in entities.items():
@@ -156,13 +147,13 @@ class Game:
             Modifier.PUSH: set()
         }
 
-        for i in range(self.level.height - 2):
-            for j in range(self.level.width - 2):
+        for j in range(self.level.height - 2):
+            for i in range(self.level.width - 2):
                 cell00 = self.level.board[i, j].entity
-                cell01 = self.level.board[i, j + 1].entity
-                cell02 = self.level.board[i, j + 2].entity
-                cell10 = self.level.board[i + 1, j].entity
-                cell20 = self.level.board[i + 2, j].entity
+                cell01 = self.level.board[i, j+1].entity
+                cell02 = self.level.board[i, j+2].entity
+                cell10 = self.level.board[i+1, j].entity
+                cell20 = self.level.board[i+2, j].entity
 
                 if cell00 and cell01 and cell02 and cell00.type is EntityType.NOUN and cell01.subtype is Link.IS and cell02.type is EntityType.MOD:
                     rules[cell02.subtype].add(cell00.subtype)
@@ -174,20 +165,20 @@ class Game:
 
     def perform(self, action: Movement):
         if not self.in_progress:
-            print("Starting game {} playig level {}".format(self.desciptor, self.initial_level.descriptor))
+            print("Starting game '{}' playig level '{}'".format(self.desciptor, self.initial_level.descriptor))
             self.in_progress = True
 
         self.rules = self.parse_rules()
         you_indexes = self.find(lambda tile: set(tile.objects) & self.rules[Modifier.YOU])
 
         if action is Movement.LEFT:
-            delta = np.array((0, -1))
-        elif action is Movement.RIGHT:
-            delta = np.array((0, 1))
-        elif action is Movement.UP:
             delta = np.array((-1, 0))
-        elif action is Movement.DOWN:
+        elif action is Movement.RIGHT:
             delta = np.array((1, 0))
+        elif action is Movement.UP:
+            delta = np.array((0, -1))
+        elif action is Movement.DOWN:
+            delta = np.array((0, 1))
         else:
             return False
 
@@ -225,8 +216,8 @@ class Game:
 
     def find(self, func: Callable[[Entity], bool]):
         pos = set()
-        for i in range(self.level.height):
-            for j in range(self.level.width):
+        for j in range(self.level.height):
+            for i in range(self.level.width):
                 if func(self.level.board[i, j]):
                     pos.add((i, j))
         return pos
@@ -247,18 +238,18 @@ class Game:
 
     def __str__(self) -> str:
         lines = []
-        for i in range(self.level.height):
-            line = ["", ""]
-            for j in range(self.level.width):
+        for j in range(self.level.height):
+            line = [" ", " "]
+            for i in range(self.level.width):
                 tile = self.level.board[i, j]
                 in_board = tile.view(self.parse_rules())
                 line[0] += in_board[0]
                 line[1] += in_board[1]
 
-                if j < self.level.width - 1:
+                if i < self.level.width - 1:
                     line[0] += " | "
                     line[1] += " | "
             lines += line
-            if i < self.level.height - 1:
+            if j < self.level.height - 1:
                 lines.append("-" * (5 * self.level.width - 1))
         return "\n".join(lines)
